@@ -49,10 +49,14 @@ watch_mask = pyinotify.IN_CLOSE_WRITE  # watched events
 
 class EventHandler(pyinotify.ProcessEvent):
     win = None
-    def __init__(self, win):
+    def __init__(self, win, filename):
         self.win = win
+        self.filename = os.path.abspath(filename)
 
     def process_IN_CLOSE_WRITE(self, event):
+        if event.pathname != self.filename:
+            return
+
         self.win.widget.update()
 
 
@@ -2086,7 +2090,7 @@ class DotWindow(gtk.Window):
             self.set_dotcode(fp.read(), filename)
             fp.close()
             if self.wm:
-                self.watcher = self.wm.add_watch(filename, watch_mask)
+                self.watcher = self.wm.add_watch(os.path.dirname(filename), watch_mask)
         except IOError, ex:
             dlg = gtk.MessageDialog(type=gtk.MESSAGE_ERROR,
                                     message_format=str(ex),
@@ -2150,9 +2154,6 @@ def main():
     win.connect('destroy', gtk.main_quit)
     win.set_filter(options.filter)
 
-    win.wm = pyinotify.WatchManager()
-    watch_handler = EventHandler(win)
-    notifier = pyinotify.Notifier(win.wm, watch_handler,timeout=10)
     if len(args) == 0:
         if not sys.stdin.isatty():
             #win.set_dotcode(sys.stdin.read())
@@ -2161,6 +2162,9 @@ def main():
         if args[0] == '-':
             win.set_dotcode(sys.stdin.read())
         else:
+            win.wm = pyinotify.WatchManager()
+            watch_handler = EventHandler(win, args[0])
+            notifier = pyinotify.Notifier(win.wm, watch_handler,timeout=10)
             win.open_file(args[0])
     def quick_check():
       assert notifier._timeout is not None, 'Notifier must be constructed with a short timeout'
